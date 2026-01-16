@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ubicanegoleon - Directorio de Negocios</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app"></div>
+
+    <script>
+        // =============================================
+        // CONFIGURACIÓN DE SUPABASE
+        // =============================================
+        const SUPABASE_URL = 'TU_SUPABASE_URL_AQUI';
+        const SUPABASE_KEY = 'TU_SUPABASE_ANON_KEY_AQUI';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // =============================================
+        // ESTADO GLOBAL
+        // =============================================
+        let state = {
+            view: 'login',
+            user: null,
+            businesses: [],
+            currentBusiness: null,
+            searchTerm: '',
+            viewCount: 1800,
+            formData: {
+                name: '', representative: '', category: '', address: '',
+                phone: '+52 477', hours: '', days: 'Lunes a Viernes',
+                description: '', logo: null, agreed: false
+            }
+        };
+
+        // =============================================
+        // FUNCIONES DE SUPABASE
+        // =============================================
+        
+        // Autenticación
+        async function login(email, password) {
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) { alert('Error: ' + error.message); return false; }
+            state.user = data.user;
+            return true;
+        }
+
+        async function register(email, password) {
+            const { data, error } = await supabase.auth.signUp({ email, password });
+            if (error) { alert('Error: ' + error.message); return false; }
+            alert('Cuenta creada. Revisa tu correo para confirmar.');
+            return true;
+        }
+
+        async function logout() {
+            await supabase.auth.signOut();
+            state.user = null;
+            state.view = 'login';
+            render();
+        }
+
+        // Obtener negocios
+        async function loadBusinesses() {
+            const { data, error } = await supabase
+                .from('businesses')
+                .select('*, reviews(rating, comment, user_name)')
+                .order('created_at', { ascending: false });
+            
+            if (!error) state.businesses = data || [];
+        }
+
+        // Guardar negocio
+        async function saveBusiness(formData) {
+            if (!formData.agreed) { alert('Debes confirmar que los datos son reales'); return; }
+            
+            const phoneRegex = /^\+52\s?477\d{7}$/;
+            if (!phoneRegex.test(formData.phone.replace(/\s/g, ''))) {
+                alert('El teléfono debe ser de León (+52 477 seguido de 7 dígitos)');
+                return;
+            }
+
+            let logoUrl = formData.logo_url;
+
+            // Subir logo si hay uno nuevo
+            if (formData.logo && formData.logo instanceof File) {
+                const fileName = `${state.user.id}/${Date.now()}_${formData.logo.name}`;
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('business-logos')
+                    .upload(fileName, formData.logo);
+
+                if (uploadError) { alert('Error subiendo logo'); return; }
+                
+                const { data: urlData } = supabase.storage
+                    .from('business-logos')
+                    .getPublicUrl(fileName);
+                logoUrl = urlData.publicUrl;
+            }
+
+            const businessData = {
+                name: formData.name,
+                representative: formData.representative,
+                category: formData.category,
+                address: formData.address,
+                phone: formData.phone,
+                hours: formData.hours,
+                days: formData.days,
+                description: formData.description,
+                logo_url: logoUrl,
+                user_id: state.user.id
+            };
+
+            if (state.currentBusiness) {
+                const { error } = await supabase
+                    .from('businesses')
+                    .update(businessData)
+                    .eq('id', state.currentBusiness.id);
+                if (error) { alert('Error actualizando negocio'); return; }
+            } else {
+                const { error } = await supabase
+                    .from('businesses')
+                    .insert([businessData]);
+                if (error) { alert('Error creando negocio'); return; }
+            }
+
+            await loadBusinesses();
+            state.view = 'list';
+            state.currentBusiness = null;
+            resetForm();
+            render();
+        }
+
+        // Eliminar negocio
+        async function deleteBusiness(id) {
+            if (!confirm('¿Seguro que deseas eliminar este negocio?')) return;
+            
+            const { error } = await supabase.from('businesses').delete().eq('id', id);
+            if (!error) {
+                await loadBusinesses();
+                state.view = 'list';
+                render();
+            }
+        }
+
+        // Guardar reseña
+        async function saveReview(businessId, rating, comment) {
+            if (!state.user) { alert('Debes iniciar sesión'); return; }
+
+            const { error } = await supabase.from('reviews').insert([{
+                business_id: businessId,
+                user_id: state.user.id,
+                user_name: state.user.email.split('@')[0],
+                rating: rating,
+                comment: comment
+            }]);
+
+            if (!error) {
+                await loadBusinesses();
+                render();
+            }
+        }
+
+        // Actualizar contador de vistas
+        async function updateViewCounter() {
+            const { data } = await supabase.from('page_views').select('view_count').single();
+            if (data) state.viewCount = data.view_count;
+            
+            setInterval(async () => {
+                const increment = Math.floor(Math.random() * 3);
+                await supabase.from('page_views')
+                    .update({ view_count: state.viewCount + increment })
+                    .eq('id', (await supabase.from('page_views').select('id').single()).data.id);
+                state.viewCount += increment;
+                render();
+            }, 5000);
+        }
+
+        // =============================================
+        // COMPONENTES UI
+        // =============================================
+
+        function Header() {
+            return `
+                <header class="bg-white border-b sticky top-0 z-50 p-4 shadow-sm">
+                    <div class="max-w-6xl mx-auto flex items-center justify-between">
+                        <h1 class="text-2xl font-bold text-emerald-600">Ubicanegoleon</h1>
+                        <div class="flex gap-4 items-center">
+                            <button onclick="changeView('list')" class="p-2 hover:bg-gray-100 rounded-full">
+                                <i class="fas fa-home text-gray-600"></i>
+                            </button>
+                            ${state.user ? `
+                                <button onclick="newBusiness()" class="bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600">
+                                    <i class="fas fa-plus mr-2"></i>Registrar Negocio
+                                </button>
+                                <button onclick="logout()" class="text-gray-500 text-sm hover:underline">Salir</button>
+                            ` : `
+                                <button onclick="changeView('login')" class="text-gray-500 text-sm hover:underline">Login</button>
+                            `}
+                        </div>
+                    </div>
+                </header>
+            `;
+        }
+
+        function FooterCounter() {
+            return `
+                <div class="fixed bottom-0 left-0 right-0 bg-gray-900 text-white p-3 text-center text-sm z-50">
+                    <i class="fas fa-users mr-2 text-emerald-400"></i>
+                    Tu negocio puede ser visto por: <span class="text-emerald-400 font-bold">${state.viewCount.toLocaleString()}</span> usuarios activos
+                </div>
+            `;
+        }
+
+        function LoginView() {
+            return `
+                <div class="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-emerald-50 to-blue-50">
+                    <div class="max-w-md w-full glass p-8 rounded-3xl shadow-xl fade-in">
+                        <div class="text-center mb-8">
+                            <div class="w-20 h-20 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-store text-3xl text-emerald-600"></i>
+                            </div>
+                            <h2 class="text-3xl font-bold text-gray-800">Ubicanegoleon</h2>
+                            <p class="text-gray-500 mt-2">${state.view === 'login' ? 'Bienvenido de nuevo' : 'Crea tu cuenta'}</p>
+                        </div>
+                        <form onsubmit="handleAuth(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Correo</label>
+                                <input type="email" id="email" required placeholder="ejemplo@correo.com" class="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-emerald-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Contraseña</label>
+                                <input type="password" id="password" required placeholder="••••••••" class="w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-emerald-500 outline-none">
+                            </div>
+                            <div class="flex gap-3 pt-2">
+                                <button type="button" onclick="changeView('login')" class="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600">Cancelar</button>
+                                <button type="submit" class="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600">
+                                    ${state.view === 'login' ? 'Ingresar' : 'Registrarse'}
+                                </button>
+                            </div>
+                            <button type="button" onclick="changeView('list')" class="w-full py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600">Ver negocios</button>
+                            <div class="text-center pt-4">
+                                <button type="button" onclick="changeView('${state.view === 'login' ? 'register' : 'login'}')" class="text-sm text-gray-600">
+                                    ${state.view === 'login' ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'} <span class="text-emerald-600 font-bold">Haz clic aquí</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function FormView() {
+            return `
+                <div class="pb-24">
+                    ${Header()}
+                    <div class="max-w-3xl mx-auto mt-8 px-4">
+                        <div class="bg-white p-8 rounded-3xl shadow-sm border fade-in">
+                            <h2 class="text-2xl font-bold mb-6">
+                                <i class="fas fa-file-signature text-emerald-500 mr-2"></i>
+                                ${state.currentBusiness ? 'Modificar' : 'Registrar'} Negocio
+                            </h2>
+                            <form onsubmit="handleSaveBusiness(event)" class="space-y-6">
+                                <div>
+                                    <label class="block text-sm font-semibold mb-2">Logotipo</label>
+                                    <input type="file" id="logo" accept="image/*" onchange="handleLogoChange(event)" class="w-full p-3 border rounded-xl">
+                                    ${state.formData.logo_url ? `<img src="${state.formData.logo_url}" class="h-24 mt-2 rounded-lg">` : ''}
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-semibold mb-1">Nombre del Negocio *</label>
+                                        <input type="text" id="name" required value="${state.formData.name}" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold mb-1">Representante</label>
+                                        <input type="text" id="representative" value="${state.formData.representative}" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold mb-1">Giro</label>
+                                        <input type="text" id="category" value="${state.formData.category}" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold mb-1">Dirección *</label>
+                                        <input type="text" id="address" required value="${state.formData.address}" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold mb-1">Teléfono *</label>
+                                        <input type="text" id="phone" required value="${state.formData.phone}" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold mb-1">Horario</label>
+                                        <input type="text" id="hours" value="${state.formData.hours}" placeholder="09:00 AM - 06:00 PM" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold mb-1">Días de Atención</label>
+                                        <select id="days" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
+                                            <option ${state.formData.days === 'Lunes a Viernes' ? 'selected' : ''}>Lunes a Viernes</option>
+                                            <option ${state.formData.days === 'Solo fines de semana' ? 'selected' : ''}>Solo fines de semana</option>
+                                            <option ${state.formData.days === 'Todos los días de la semana' ? 'selected' : ''}>Todos los días de la semana</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold mb-1">Ciudad</label>
+                                        <input type="text" value="León, Guanajuato" disabled class="w-full p-3 border rounded-xl bg-gray-50">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold mb-1">Descripción</label>
+                                    <textarea id="description" rows="3" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">${state.formData.description}</textarea>
+                                </div>
+                                <label class="flex items-center gap-3 p-4 bg-emerald-50 rounded-2xl cursor-pointer">
+                                    <input type="checkbox" id="agreed" ${state.formData.agreed ? 'checked' : ''} class="w-5 h-5 rounded text-emerald-600">
+                                    <span class="text-sm text-emerald-800">Confirmo que los datos son correctos y reales</span>
+                                </label>
+                                <div class="flex gap-4">
+                                    <button type="button" onclick="changeView('list')" class="flex-1 py-4 bg-gray-100 rounded-2xl font-bold hover:bg-gray-200">Cancelar</button>
+                                    <button type="submit" class="flex-1 py-4 bg-emerald-500 text-white rounded-2xl font-bold hover:bg-emerald-600">Guardar</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    ${FooterCounter()}
+                </div>
+            `;
+        }
+
+        function ListView() {
+            const filtered = state.businesses.filter(b => 
+                b.name.toLowerCase().includes(state.searchTerm.toLowerCase()) ||
+                (b.category && b.category.toLowerCase().includes(state.searchTerm.toLowerCase()))
+            );
+
+            return `
+                <div class="pb-24">
+                    ${Header()}
+                    <div class="bg-white border-b py-6 px-4 mb-8">
+                        <div class="max-w-6xl mx-auto">
+                            <input type="text" id="search" value="${state.searchTerm}" 
+                                onkeyup="handleSearch(event)"
+                                placeholder="Busca por nombre o giro..." 
+                                class="w-full max-w-2xl mx-auto block px-4 py-4 rounded-2xl bg-gray-100 focus:ring-2 focus:ring-emerald-500 outline-none">
+                        </div>
+                    </div>
+                    <main class="max-w-6xl mx-auto px-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        ${filtered.map(b => `
+                            <div class="bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all border">
+                                <div class="h-48 overflow-hidden relative">
+                                    <img src="${b.logo_url || 'https://via.placeholder.com/400x200?text=Negocio'}" class="w-full h-full object-cover">
+                                    <div class="absolute top-4 right-4 bg-white/90 px-3 py-1 rounded-full text-xs font-bold text-emerald-600">
+                                        ${b.category || 'Negocio'}
+                                    </div>
+                                </div>
+                                <div class="p-6">
+                                    <h3 class="text-xl font-bold mb-2">${b.name}</h3>
+                                    <p class="text-sm text-gray-500 mb-4">
+                                        <i class="fas fa-map-marker-alt text-red-400 mr-1"></i>${b.address}
+                                    </p>
+                                    <div class="flex gap-3">
+                                        <button onclick="viewBusiness('${b.id}')" class="flex-1 py-3 bg-emerald-50 text-emerald-600 rounded-xl font-bold hover:bg-emerald-100">Detalles</button>
+                                        ${state.user && b.user_id === state.user.id ? `
+                                            <button onclick="editBusiness('${b.id}')" class="p-3 bg-gray-50 text-gray-400 rounded-xl hover:text-blue-500">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </main>
+                    ${FooterCounter()}
+                </div>
+            `;
+        }
+
+        function ProfileView() {
+            const b = state.currentBusiness;
+            if (!b) return '';
+
+            return `
+                <div class="pb-24 min-h-screen">
+                    ${Header()}
+                    <div class="max-w-4xl mx-auto mt-10 px-4">
+                        <div class="bg-white rounded-3xl overflow-hidden shadow-xl fade-in">
+                            <div class="bg-emerald-600 h-40 relative">
+                                <button onclick="changeView('list')" class="absolute top-6 left-6 w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white">
+                                    <i class="fas fa-arrow-left"></i>
+                                </button>
+                                <div class="absolute -bottom-16 left-8 p-1 bg-white rounded-3xl shadow-lg">
+                                    <img src="${b.logo_url || 'https://via.placeholder.com/150'}" class="w-32 h-32 rounded-2xl object-cover">
+                                </div>
+                            </div>
+                            <div class="pt-20 px-8 pb-8">
+                                <div class="flex justify-between items-start mb-6">
+                                    <div>
+                                        <h2 class="text-4xl font-bold">${b.name}</h2>
+                                        <p class="text-emerald-600 font-semibold">${b.category || 'Negocio'}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="flex items-center gap-1 text-yellow-500 text-xl font-bold">
+                                            <i class="fas fa-star"></i>${b.rating || '0.0'}
+                                        </div>
+                                        <p class="text-gray-400 text-sm">${b.total_ratings || 0} reseñas</p>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div class="space-y-6">
+                                        <section>
+                                            <h4 class="text-sm font-bold text-gray-400 uppercase mb-3">Contacto</h4>
+                                            <div class="space-y-3">
+                                                <div class="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                                                    <i class="fas fa-phone text-emerald-500"></i>
+                                                    <span>${b.phone}</span>
+                                                </div>
+                                                <div class="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                                                    <i class="fas fa-map-marked-alt text-red-500"></i>
+                                                    <span>${b.address}, ${b.city}</span>
+                                                </div>
+                                            </div>
+                                        </section>
+                                        <section>
+                                            <h4 class="text-sm font-bold text-gray-400 uppercase mb-3">Horario</h4>
+                                            <div class="p-4 bg-gray-50 rounded-2xl space-y-2">
+                                                <div class="flex justify-between">
+                                                    <span class="text-gray-600">Días:</span>
+                                                    <span class="font-bold">${b.days}</span>
+                                                </div>
+                                                <div class="flex justify-between">
+                                                    <span class="text-gray-600">Horas:</span>
+                                                    <span class="font-bold">${b.hours || 'No especificado'}</span>
+                                                </div>
+                                            </div>
+                                        </section>
+                                    </div>
+                                    <div class="space-y-6">
+                                        <section>
+                                            <h4 class="text-sm font-bold text-gray-400 uppercase mb-3">Sobre nosotros</h4>
+                                            <p class="text-gray-600 bg-emerald-50/50 p-6 rounded-3xl border border-emerald-100">
+                                                ${b.description || 'Sin descripción disponible'}
+                                            </p>
+                                        </section>
+                                        ${state.user && b.user_id === state.user.id ? `
+                                            <button onclick="deleteBusiness('${b.id}')" class="w-full py-3 bg-red-50 text-red-600 rounded-xl font-bold hover:bg-red-100">
+                                                <i class="fas fa-trash mr-2"></i>Eliminar Negocio
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                </div>
+
+                                ${state.user ? `
+                                    <div class="mt-8 pt-8 border-t">
+                                        <h4 class="text-lg font-bold mb-4">Dejar una reseña</h4>
+                                        <form onsubmit="handleReview(event, '${b.id}')" class="space-y-4">
+                                            <div>
+                                                <label class="block text-sm font-semibold mb-2">Calificación</label>
+                                                <div class="flex gap-2">
+                                                    ${[1,2,3,4,5].map(i => `<button type="button" onclick="selectRating(${i})" class="star-btn text-2xl text-gray-300 hover:text-yellow-500" data-rating="${i}">★</button>`).join('')}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-semibold mb-2">Comentario</label>
+                                                <textarea id="review-comment" rows="3" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"></textarea>
+                                            </div>
+                                            <button type="submit" class="px-6 py-3 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600">Publicar</button>
+                                        </form>
+                                    </div>
+                                ` : ''}
+
+                                <div class="mt-8 pt-8 border-t">
+                                    <h4 class="text-lg font-bold mb-4">Reseñas (${b.reviews?.length || 0})</h4>
+                                    <div class="space-y-4">
+                                        ${(b.reviews || []).map(r => `
+                                            <div class="p-4 bg-gray-50 rounded-2xl">
+                                                <div class="flex items-center justify-between mb-2">
+                                                    <span class="font-bold">${r.user_name}</span>
+                                                    <div class="text-yellow-500">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div>
+                                                </div>
+                                                <p class="text-gray-600 text-sm">${r.comment}</p>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    ${FooterCounter()}
+                </div>
+            `;
+        }
+
+        // =============================================
+        // MANEJADORES DE EVENTOS
+        // =============================================
+
+        let selectedRating = 0;
+        
+        function selectRating(rating) {
+            selectedRating = rating;
+            document.querySelectorAll('.star-btn').forEach((btn, i) => {
+                btn.style.color = i < rating ? '#eab308' : '#d1d5db';
+            });
+        }
+
+        async function handleAuth(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            if (state.view === 'login') {
+                if (await login(email, password)) {
+                    await loadBusinesses();
+                    state.view = 'list';
+                    render();
+                }
+            } else {
+                if (await register(email, password)) {
+                    state.view = 'login';
+                    render();
+                }
+            }
+        }
+
+        function handleLogoChange(e) {
+            state.formData.logo = e.target.files[0];
+        }
+
+        async function handleSaveBusiness(e) {
+            e.preventDefault();
+            state.formData = {
+                ...state.formData,
+                name: document.getElementById('name').value,
+                representative: document.getElementById('representative').value,
+                category: document.getElementById('category').value,
+                address: document.getElementById('address').value,
+                phone: document.getElementById('phone').value,
+                hours: document.getElementById('hours').value,
+                days: document.getElementById('days').value,
+                description: document.getElementById('description').value,
+                agreed: document.getElementById('agreed').checked
+            };
+            await saveBusiness(state.formData);
+        }
+
+        async function handleReview(e, businessId) {
+            e.preventDefault();
+            if (selectedRating === 0) { alert('Selecciona una calificación'); return; }
+            const comment = document.getElementById('review-comment').value;
+            await saveReview(businessId, selectedRating, comment);
+            selectedRating = 0;
+        }
+
+        function handleSearch(e) {
+            state.searchTerm = e.target.value;
+            render();
+        }
+
+        function changeView(view) {
+            state.view = view;
+            render();
+        }
+
+        function newBusiness() {
+            resetForm();
+            state.currentBusiness = null;
+            state.view = 'form';
+            render();
+        }
+
+        function editBusiness(id) {
+            const biz = state.businesses.find(b => b.id === id);
+            if (biz) {
+                state.currentBusiness = biz;
+                state.formData = {...biz};
+                state.view = 'form';
+                render();
+            }
+        }
+
+        function viewBusiness(id) {
+            state.currentBusiness = state.businesses.find(b => b.id === id);
+            state.view = 'profile';
+            render();
+        }
+
+        function resetForm() {
+            state.formData = {
+                name: '', representative: '', category: '', address: '',
+                phone: '+52 477', hours: '', days: 'Lunes a Viernes',
+                description: '', logo: null, agreed: false
+            };
+        }
+
+        // =============================================
+        // RENDERIZADO
+        // =============================================
+
+        function render() {
+            const app = document.getElementById('app');
+            let content = '';
+
+            switch(state.view) {
+                case 'login':
+                case 'register':
+                    content = LoginView();
+                    break;
+                case 'form':
+                    content = FormView();
+                    break;
+                case 'list':
+                    content = ListView();
+                    break;
+                case 'profile':
+                    content = ProfileView();
+                    break;
+            }
+
+            app.innerHTML = content;
+        }
+
+        // =============================================
+        // INICIALIZACIÓN
+        // =============================================
+
+        async function init() {
+            // Verificar sesión existente
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                state.user = session.user;
+                state.view = 'list';
+            }
+
+            await loadBusinesses();
+            await updateViewCounter();
+            render();
+
+            // Escuchar cambios de autenticación
+            supabase.auth.onAuthStateChange((event, session) => {
+                state.user = session?.user || null;
+                if (!state.user) state.view = 'login';
+                render();
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
