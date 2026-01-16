@@ -321,21 +321,12 @@
         }
 
         async function updateViewCounterData() {
-            try {
-                const { data } = await supabaseClient.from('page_views').select('view_count').single();
-                if (data) appState.viewCount = data.view_count;
-                
-                setInterval(async () => {
-                    const increment = Math.floor(Math.random() * 5) + 1;
-                    const newCount = appState.viewCount + increment;
-                    
-                    await supabaseClient.from('page_views').update({ view_count: newCount }).eq('id', 1);
-                    appState.viewCount = newCount;
-                    updateCounterDisplay();
-                }, 8000);
-            } catch (error) {
-                console.error('Error contador:', error);
-            }
+            // Simular contador sin base de datos
+            setInterval(() => {
+                const increment = Math.floor(Math.random() * 5) + 1;
+                appState.viewCount += increment;
+                updateCounterDisplay();
+            }, 8000);
         }
 
         function updateCounterDisplay() {
