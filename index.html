@@ -71,7 +71,11 @@
         }
 
         .gradient-navy-blue {
-            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #ffffff 100%);
+            background: linear-gradient(135deg, rgba(30, 58, 138, 0.8) 0%, rgba(30, 64, 175, 0.8) 50%, rgba(255, 255, 255, 0.8) 100%);
+        }
+
+        .gradient-red-translucent {
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.7) 0%, rgba(185, 28, 28, 0.7) 100%);
         }
         
         .input-focus {
@@ -85,11 +89,12 @@
         }
         
         .btn-gold {
-            background: linear-gradient(135deg, #d4af37 0%, #aa8a2e 100%);
+            background: linear-gradient(135deg, rgba(212, 175, 55, 0.8) 0%, rgba(170, 138, 46, 0.8) 100%);
             transition: all 0.3s ease;
         }
 
         .btn-gold:hover {
+            background: linear-gradient(135deg, rgba(212, 175, 55, 0.9) 0%, rgba(170, 138, 46, 0.9) 100%);
             transform: translateY(-2px);
             box-shadow: 0 10px 25px rgba(212, 175, 55, 0.4);
         }
@@ -147,9 +152,21 @@
             word-wrap: break-word;
         }
 
-        /* Descripción destacada */
+        /* Descripción destacada - NUEVO ESTILO */
         .description-highlight {
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.8) 100%);
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.6) 100%);
+            backdrop-filter: blur(10px);
+        }
+
+        /* Botones translúcidos elegantes */
+        .btn-translucent {
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .btn-translucent:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
         }
     </style>
 </head>
@@ -175,15 +192,16 @@
             keepLoggedIn: false,
             selectedRating: 0,
             showPassword: {},
+            isPasswordReset: false,
             formData: {
                 name: '', representative: '', category: '', address: '', phone: '', 
                 hours: '', days: 'Lunes a Viernes', description: '', logo: null, logo_url: '', agreed: false
             }
         };
 
-        // Prevenir re-renderizado en búsqueda
+        // Variables para optimización de búsqueda
         let searchTimeout = null;
-        let isSearching = false;
+        let lastSearchTerm = '';
 
         // ========== MODAL MODERNO ==========
         function showModal(title, message, type = 'error') {
@@ -212,7 +230,7 @@
                     </div>
                     <div class="p-6 pt-0 flex gap-3">
                         <button onclick="this.closest('.modal-overlay').remove()" 
-                            class="flex-1 px-6 py-3 bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 text-white rounded-xl font-semibold transition-all">
+                            class="flex-1 px-6 py-3 bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 text-white rounded-xl font-semibold transition-all btn-translucent">
                             Cerrar
                         </button>
                     </div>
@@ -220,6 +238,77 @@
             `;
             document.getElementById('modal-root').appendChild(modal);
             setTimeout(() => modal.remove(), 5000);
+        }
+
+        // ========== MODAL DE CAMBIO DE CONTRASEÑA ==========
+        function showPasswordResetModal() {
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay fixed inset-0 z-50 flex items-center justify-center p-6';
+            modal.innerHTML = `
+                <div class="modal-content glass max-w-md w-full rounded-3xl overflow-hidden shadow-2xl border-2 border-blue-500/30">
+                    <div class="bg-blue-500/10 p-6 border-b border-gray-700/50">
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 rounded-full bg-gray-800/50 flex items-center justify-center">
+                                <i class="fas fa-key text-3xl text-blue-400"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-white">Nueva Contraseña</h3>
+                        </div>
+                    </div>
+                    <form id="password-reset-form" class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-300 mb-2">
+                                <i class="fas fa-lock text-yellow-400 mr-2"></i>Nueva Contraseña
+                            </label>
+                            <input type="password" id="new-password" required placeholder="Mínimo 6 caracteres" 
+                                class="w-full px-5 py-4 rounded-xl border-2 border-gray-700 bg-gray-900/50 text-white focus:border-yellow-500 focus:ring-4 focus:ring-yellow-500/20 outline-none input-focus transition-all">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-300 mb-2">
+                                <i class="fas fa-lock text-yellow-400 mr-2"></i>Confirmar Contraseña
+                            </label>
+                            <input type="password" id="confirm-new-password" required placeholder="Repite la contraseña" 
+                                class="w-full px-5 py-4 rounded-xl border-2 border-gray-700 bg-gray-900/50 text-white focus:border-yellow-500 focus:ring-4 focus:ring-yellow-500/20 outline-none input-focus transition-all">
+                        </div>
+                        <div class="flex gap-3 pt-4">
+                            <button type="button" onclick="this.closest('.modal-overlay').remove(); logoutUser();" 
+                                class="flex-1 px-6 py-3 gradient-red-translucent text-white rounded-xl font-semibold transition-all btn-translucent">
+                                Cancelar
+                            </button>
+                            <button type="submit" 
+                                class="flex-1 px-6 py-3 gradient-green text-white rounded-xl font-semibold transition-all btn-translucent">
+                                Cambiar Contraseña
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.getElementById('modal-root').appendChild(modal);
+
+            document.getElementById('password-reset-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const newPassword = document.getElementById('new-password').value;
+                const confirmPassword = document.getElementById('confirm-new-password').value;
+                
+                if (newPassword !== confirmPassword) {
+                    showModal('Error', 'Las contraseñas no coinciden', 'error');
+                    return;
+                }
+                
+                if (newPassword.length < 6) {
+                    showModal('Error', 'La contraseña debe tener al menos 6 caracteres', 'error');
+                    return;
+                }
+
+                try {
+                    const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+                    if (error) throw error;
+                    modal.remove();
+                    showModal('¡Éxito!', 'Tu contraseña ha sido actualizada correctamente', 'success');
+                    state.isPasswordReset = false;
+                } catch (error) {
+                    showModal('Error', error.message, 'error');
+                }
+            });
         }
 
         // ========== VALIDACIÓN Y MENSAJES DE ERROR MEJORADOS ==========
@@ -298,6 +387,7 @@
             await supabaseClient.auth.signOut();
             state.user = null;
             state.view = 'login';
+            state.isPasswordReset = false;
             localStorage.removeItem('keepLoggedIn');
             render();
         }
@@ -338,7 +428,6 @@
         }
 
         async function saveBusiness(formData) {
-            // Validar nombre del negocio primero
             if (!formData.name || formData.name.trim() === '') {
                 showModal('Campo Obligatorio', 'El nombre del negocio es obligatorio. Por favor ingrésalo.', 'warning');
                 return;
@@ -349,7 +438,6 @@
                 return;
             }
             
-            // Validación mejorada de teléfono (solo números, máximo 16 caracteres)
             const phoneDigits = formData.phone.replace(/\D/g, '');
             if (phoneDigits.length === 0 || phoneDigits.length > 16) {
                 showModal('Teléfono Inválido', 'El teléfono debe contener entre 1 y 16 números', 'error');
@@ -462,11 +550,12 @@
             }
         }
 
+        // Contador más lento - cada 8-12 minutos aproximadamente
         setInterval(() => {
             state.viewCount += Math.floor(Math.random() * 5) + 1;
             const el = document.getElementById('view-counter');
             if (el) el.textContent = state.viewCount.toLocaleString();
-        }, 8000);
+        }, 600000); // 10 minutos (600,000 ms)
 
         // ========== COMPONENTES ==========
         const Header = () => `
@@ -482,20 +571,20 @@
                         
                         <nav class="flex items-center gap-2 sm:gap-3">
                             ${state.view !== 'login' && state.view !== 'register' ? `
-                                <button onclick="changeView('list')" class="p-2 sm:p-3 rounded-xl transition-all ${state.view === 'list' ? 'bg-yellow-500/20 text-yellow-400' : 'text-gray-400 hover:bg-gray-800'}">
+                                <button onclick="changeView('list')" class="p-2 sm:p-3 rounded-xl transition-all btn-translucent ${state.view === 'list' ? 'bg-yellow-500/20 text-yellow-400' : 'text-gray-400 hover:bg-gray-800'}">
                                     <i class="fas fa-home text-base sm:text-lg"></i>
                                 </button>
                             ` : ''}
                             
                             ${state.user ? `
-                                <button onclick="createBusiness()" class="gradient-green text-white px-3 sm:px-5 py-2 sm:py-3 rounded-xl font-semibold shadow-lg hidden md:flex items-center gap-2 hover:opacity-90 transition-all">
+                                <button onclick="createBusiness()" class="gradient-green text-white px-3 sm:px-5 py-2 sm:py-3 rounded-xl font-semibold shadow-lg hidden md:flex items-center gap-2 hover:opacity-90 transition-all btn-translucent">
                                     <i class="fas fa-plus"></i><span>Registrar Negocio</span>
                                 </button>
-                                <button onclick="createBusiness()" class="gradient-green text-white p-2 sm:p-3 rounded-xl shadow-lg md:hidden hover:opacity-90 transition-all">
+                                <button onclick="createBusiness()" class="gradient-green text-white p-2 sm:p-3 rounded-xl shadow-lg md:hidden hover:opacity-90 transition-all btn-translucent">
                                     <i class="fas fa-plus"></i>
                                 </button>
                                 <div class="relative group">
-                                    <button class="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl hover:bg-gray-800 transition-all">
+                                    <button class="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl hover:bg-gray-800 transition-all btn-translucent">
                                         <div class="w-7 h-7 sm:w-8 sm:h-8 gradient-gold rounded-full flex items-center justify-center text-black font-bold text-xs sm:text-sm">
                                             ${state.user.email.charAt(0).toUpperCase()}
                                         </div>
@@ -513,7 +602,7 @@
                                 </div>
                             ` : `
                                 ${state.view !== 'login' && state.view !== 'register' ? `
-                                    <button onclick="changeView('login')" class="px-3 sm:px-5 py-2 sm:py-2.5 text-yellow-400 hover:bg-yellow-500/10 rounded-xl font-semibold transition-all text-sm sm:text-base">Iniciar Sesión</button>
+                                    <button onclick="changeView('login')" class="px-3 sm:px-5 py-2 sm:py-2.5 text-yellow-400 hover:bg-yellow-500/10 rounded-xl font-semibold transition-all text-sm sm:text-base btn-translucent">Iniciar Sesión</button>
                                 ` : ''}
                             `}
                         </nav>
@@ -593,12 +682,12 @@
                                     </div>
                                 ` : ''}
 
-                                <button type="submit" class="w-full btn-gold text-black py-4 rounded-xl font-bold shadow-lg">
+                                <button type="submit" class="w-full btn-gold text-black py-4 rounded-xl font-bold shadow-lg btn-translucent">
                                     <i class="fas fa-${isLogin ? 'sign-in-alt' : 'user-plus'} mr-2"></i>
                                     ${isLogin ? 'Iniciar Sesión' : 'Crear Cuenta'}
                                 </button>
 
-                                <button type="button" onclick="changeView('list')" class="w-full py-4 bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 text-white rounded-xl font-bold transition-all">
+                                <button type="button" onclick="changeView('list')" class="w-full py-4 bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 text-white rounded-xl font-bold transition-all btn-translucent">
                                     <i class="fas fa-eye mr-2"></i>Ver Directorio de Negocios
                                 </button>
 
@@ -721,10 +810,10 @@
 
                             <div class="flex flex-col sm:flex-row gap-4 pt-4">
                                 <button type="button" onclick="changeView('list')" 
-                                    class="flex-1 py-4 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-bold transition-all">
+                                    class="flex-1 py-4 gradient-red-translucent text-white rounded-xl font-bold transition-all btn-translucent">
                                     <i class="fas fa-times mr-2"></i>Cancelar
                                 </button>
-                                <button type="submit" class="flex-1 gradient-green text-white py-4 rounded-xl font-bold shadow-lg hover:opacity-90 transition-all">
+                                <button type="submit" class="flex-1 gradient-green text-white py-4 rounded-xl font-bold shadow-lg hover:opacity-90 transition-all btn-translucent">
                                     <i class="fas fa-save mr-2"></i>Guardar Negocio
                                 </button>
                             </div>
@@ -759,7 +848,7 @@
                                         placeholder="Busca por nombre o giro..." 
                                         class="w-full pl-12 sm:pl-16 pr-4 sm:pr-6 py-4 sm:py-5 rounded-2xl bg-white/80 backdrop-blur-sm border-2 border-gray-300 text-gray-900 placeholder-gray-500 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-500/20 outline-none input-focus text-base sm:text-lg shadow-lg">
                                 </div>
-                                <button onclick="performSearch()" class="gradient-navy-blue text-white px-6 sm:px-8 py-4 sm:py-5 rounded-2xl font-bold shadow-lg hover:opacity-90 transition-all whitespace-nowrap">
+                                <button onclick="performSearch()" class="gradient-navy-blue text-white px-6 sm:px-8 py-4 sm:py-5 rounded-2xl font-bold shadow-lg hover:opacity-90 transition-all whitespace-nowrap btn-translucent">
                                     <i class="fas fa-search mr-2"></i><span class="hidden sm:inline">Buscar</span>
                                 </button>
                             </div>
@@ -775,7 +864,7 @@
                                 <h3 class="text-2xl font-bold text-white mb-2">No se encontraron negocios</h3>
                                 <p class="text-gray-400 mb-6">Intenta con otros términos de búsqueda</p>
                                 ${state.user ? `
-                                    <button onclick="createBusiness()" class="btn-gold text-black px-8 py-4 rounded-xl font-bold shadow-lg">
+                                    <button onclick="createBusiness()" class="btn-gold text-black px-8 py-4 rounded-xl font-bold shadow-lg btn-translucent">
                                         <i class="fas fa-plus mr-2"></i>Registra el primer negocio
                                     </button>
                                 ` : ''}
@@ -826,12 +915,12 @@
 
                                             <div class="flex gap-3">
                                                 <button onclick="viewBusiness('${b.id}')" 
-                                                    class="flex-1 py-3 gradient-white-translucent text-black font-bold rounded-xl hover:shadow-xl transition-all">
+                                                    class="flex-1 py-3 gradient-white-translucent text-black font-bold rounded-xl hover:shadow-xl transition-all btn-translucent">
                                                     Ver Detalles
                                                 </button>
                                                 ${state.user && b.user_id === state.user.id ? `
                                                     <button onclick="editBusiness('${b.id}')" 
-                                                        class="p-3 bg-blue-500/20 text-blue-400 rounded-xl hover:bg-blue-500/30 transition-all">
+                                                        class="p-3 bg-blue-500/20 text-blue-400 rounded-xl hover:bg-blue-500/30 transition-all btn-translucent">
                                                         <i class="fas fa-edit"></i>
                                                     </button>
                                                 ` : ''}
@@ -856,42 +945,66 @@
                     ${Header()}
                     <div class="max-w-5xl mx-auto mt-6 sm:mt-10 px-4 sm:px-6">
                         <div class="glass rounded-3xl overflow-hidden shadow-2xl fade-in border-2 border-yellow-500/20">
-                            <div class="h-48 sm:h-64 bg-gradient-to-br from-yellow-600 via-yellow-500 to-yellow-400 relative overflow-hidden flex items-center">
+                            <!-- HEADER REORGANIZADO - Info arriba, logo abajo centrado -->
+                            <div class="h-auto bg-gradient-to-br from-yellow-600 via-yellow-500 to-yellow-400 relative overflow-hidden">
                                 <div class="absolute inset-0 bg-black/20"></div>
+                                
+                                <!-- Botón volver arriba a la izquierda -->
                                 <button onclick="changeView('list')" 
-                                    class="absolute top-4 sm:top-6 left-4 sm:left-6 w-10 h-10 sm:w-12 sm:h-12 glass-light rounded-xl flex items-center justify-center text-white hover:bg-white/20 transition-all shadow-lg z-10">
+                                    class="absolute top-4 sm:top-6 left-4 sm:left-6 w-10 h-10 sm:w-12 sm:h-12 glass-light rounded-xl flex items-center justify-center text-white hover:bg-white/20 transition-all shadow-lg z-10 btn-translucent">
                                     <i class="fas fa-arrow-left text-lg sm:text-xl"></i>
                                 </button>
                                 
-                                <div class="relative z-10 w-full px-4 sm:px-8 flex items-center justify-between">
-                                    <div class="flex items-center gap-4 sm:gap-6">
+                                <!-- Contenido principal reorganizado -->
+                                <div class="relative z-10 w-full px-4 sm:px-8 pt-16 sm:pt-20 pb-6 sm:pb-8">
+                                    <!-- Nombre y rating en la parte superior -->
+                                    <div class="text-center mb-6">
+                                        <h2 class="text-3xl sm:text-4xl font-bold text-white mb-3 drop-shadow-lg">${b.name}</h2>
+                                        ${b.category ? `
+                                            <span class="inline-block px-4 py-2 glass rounded-full text-sm font-bold text-white/90 shadow-lg">
+                                                <i class="fas fa-tag mr-2"></i>${b.category}
+                                            </span>
+                                        ` : ''}
+                                    </div>
+
+                                    <!-- Logo centrado abajo -->
+                                    <div class="flex justify-center">
                                         <div class="p-2 glass rounded-3xl shadow-2xl">
                                             <img src="${b.logo_url || 'https://via.placeholder.com/160/d4af37/000000?text=Logo'}" 
-                                                class="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl object-cover"
+                                                class="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl object-cover"
                                                 onerror="this.src='https://via.placeholder.com/160/d4af37/000000?text=Logo'">
                                         </div>
-                                        <div>
-                                            <h2 class="text-2xl sm:text-3xl font-bold text-white mb-1 drop-shadow-lg">${b.name}</h2>
-                                        </div>
                                     </div>
-                                    
-                                    ${b.rating > 0 ? `
-                                    <div class="glass px-4 sm:px-6 py-3 sm:py-4 rounded-2xl text-center shadow-lg border border-white/30">
-                                        <div class="flex items-center gap-2 text-2xl sm:text-3xl font-bold text-white mb-1">
-                                            <i class="fas fa-star text-yellow-300"></i>
-                                            <span>${b.rating}</span>
-                                        </div>
-                                        <p class="text-xs sm:text-sm text-white/80">${b.total_ratings} ${b.total_ratings === 1 ? 'reseña' : 'reseñas'}</p>
-                                    </div>
-                                    ` : ''}
                                 </div>
+
+                                <!-- Rating y botón eliminar en la esquina superior derecha -->
+                                ${b.rating > 0 || (state.user && b.user_id === state.user.id) ? `
+                                    <div class="absolute top-4 sm:top-6 right-4 sm:right-6 flex flex-col items-end gap-3 z-10">
+                                        ${b.rating > 0 ? `
+                                            <div class="glass px-4 sm:px-6 py-3 sm:py-4 rounded-2xl text-center shadow-lg border border-white/30">
+                                                <div class="flex items-center gap-2 text-2xl sm:text-3xl font-bold text-white mb-1">
+                                                    <i class="fas fa-star text-yellow-300"></i>
+                                                    <span>${b.rating}</span>
+                                                </div>
+                                                <p class="text-xs sm:text-sm text-white/80">${b.total_ratings} ${b.total_ratings === 1 ? 'reseña' : 'reseñas'}</p>
+                                            </div>
+                                        ` : ''}
+                                        
+                                        ${state.user && b.user_id === state.user.id ? `
+                                            <button onclick="deleteBusiness('${b.id}')" 
+                                                class="px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-red-600/80 to-red-500/80 hover:from-red-500/80 hover:to-red-400/80 text-white rounded-2xl font-bold transition-all shadow-lg btn-translucent backdrop-blur-sm">
+                                                <i class="fas fa-trash mr-2"></i><span class="hidden sm:inline">Eliminar</span>
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                ` : ''}
                             </div>
 
                             <div class="px-4 sm:px-8 py-6 sm:py-10">
                                 ${b.description ? `
                                     <div class="mb-8">
                                         <div class="description-highlight p-6 sm:p-8 rounded-2xl shadow-lg border-l-4 border-yellow-500">
-                                            <p class="text-black leading-relaxed description-text font-bold text-base sm:text-lg">${b.description}</p>
+                                            <p class="text-white leading-relaxed description-text font-bold text-base sm:text-lg">${b.description}</p>
                                         </div>
                                     </div>
                                 ` : ''}
@@ -908,9 +1021,9 @@
                                                     <div class="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
                                                         <i class="fas fa-phone text-yellow-400 text-xl"></i>
                                                     </div>
-                                                    <div class="flex-1">
+                                                    <div class="flex-1 min-w-0">
                                                         <p class="text-xs text-gray-500 mb-1">Teléfono</p>
-                                                        <p class="font-semibold text-white">${b.phone}</p>
+                                                        <p class="font-semibold text-white break-all">${b.phone}</p>
                                                     </div>
                                                 </div>
                                                 ` : ''}
@@ -920,15 +1033,28 @@
                                                     <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
                                                         <i class="fas fa-map-marked-alt text-red-400 text-xl"></i>
                                                     </div>
-                                                    <div class="flex-1">
+                                                    <div class="flex-1 min-w-0">
                                                         <p class="text-xs text-gray-500 mb-1">Dirección</p>
-                                                        <p class="font-semibold text-white">${b.address}, León, Gto.</p>
+                                                        <p class="font-semibold text-white break-words">${b.address}, León, Gto.</p>
                                                     </div>
                                                 </div>
                                                 ` : ''}
                                             </div>
                                         </section>
 
+                                        ${b.representative ? `
+                                            <section>
+                                                <h4 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">
+                                                    <i class="fas fa-user-tie mr-2"></i>Representante
+                                                </h4>
+                                                <div class="glass-light p-6 rounded-2xl">
+                                                    <p class="font-semibold text-white break-words">${b.representative}</p>
+                                                </div>
+                                            </section>
+                                        ` : ''}
+                                    </div>
+
+                                    <div class="space-y-6">
                                         <section>
                                             <h4 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">
                                                 <i class="fas fa-clock mr-2"></i>Horario de Atención
@@ -936,34 +1062,14 @@
                                             <div class="glass-light p-6 rounded-2xl space-y-3">
                                                 <div class="flex items-center justify-between py-2 border-b border-gray-700">
                                                     <span class="text-gray-400 font-medium">Días</span>
-                                                    <span class="font-bold text-white">${b.days}</span>
+                                                    <span class="font-bold text-white text-right break-words ml-4">${b.days}</span>
                                                 </div>
                                                 <div class="flex items-center justify-between py-2">
                                                     <span class="text-gray-400 font-medium">Horario</span>
-                                                    <span class="font-bold text-white">${b.hours || 'No especificado'}</span>
+                                                    <span class="font-bold text-white text-right break-words ml-4">${b.hours || 'No especificado'}</span>
                                                 </div>
                                             </div>
                                         </section>
-                                    </div>
-
-                                    <div class="space-y-6">
-                                        ${b.representative ? `
-                                            <section>
-                                                <h4 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">
-                                                    <i class="fas fa-user-tie mr-2"></i>Representante
-                                                </h4>
-                                                <div class="glass-light p-6 rounded-2xl">
-                                                    <p class="font-semibold text-white">${b.representative}</p>
-                                                </div>
-                                            </section>
-                                        ` : ''}
-
-                                        ${state.user && b.user_id === state.user.id ? `
-                                            <button onclick="deleteBusiness('${b.id}')" 
-                                                class="w-full py-4 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white rounded-xl font-bold transition-all">
-                                                <i class="fas fa-trash mr-2"></i>Eliminar Negocio
-                                            </button>
-                                        ` : ''}
                                     </div>
                                 </div>
 
@@ -976,7 +1082,7 @@
                                         <form onsubmit="handleReview(event, '${b.id}')" class="space-y-6">
                                             <div>
                                                 <label class="block text-sm font-bold text-gray-300 mb-3">Calificación</label>
-                                                <div class="flex gap-2 sm:gap-3 justify-center sm:justify-start">
+                                                <div class="flex gap-2 sm:gap-3 justify-center">
                                                     ${[1,2,3,4,5].map(i => `
                                                         <button type="button" onclick="selectRating(${i})" 
                                                             class="star-btn text-4xl sm:text-5xl transition-all hover:scale-110" data-rating="${i}">
@@ -992,8 +1098,8 @@
                                                     class="w-full px-4 py-3 border-2 border-gray-700 bg-gray-900/50 text-white rounded-xl focus:border-yellow-500 focus:ring-4 focus:ring-yellow-500/20 outline-none input-focus resize-none"></textarea>
                                             </div>
                                             
-                                            <div class="flex justify-center sm:justify-start">
-                                                <button type="submit" class="gradient-green text-white px-8 py-4 rounded-xl font-bold shadow-lg hover:opacity-90 transition-all">
+                                            <div class="flex justify-center">
+                                                <button type="submit" class="gradient-green text-white px-8 py-4 rounded-xl font-bold shadow-lg hover:opacity-90 transition-all btn-translucent">
                                                     <i class="fas fa-paper-plane mr-2"></i>Publicar Reseña
                                                 </button>
                                             </div>
@@ -1003,7 +1109,7 @@
                                     <div class="glass-light p-8 rounded-3xl text-center mb-10 border-2 border-gray-700">
                                         <i class="fas fa-lock text-4xl text-gray-600 mb-4"></i>
                                         <p class="text-gray-400 mb-4">Inicia sesión para dejar tu reseña</p>
-                                        <button onclick="changeView('login')" class="btn-gold text-black px-8 py-3 rounded-xl font-bold shadow-lg">
+                                        <button onclick="changeView('login')" class="btn-gold text-black px-8 py-3 rounded-xl font-bold shadow-lg btn-translucent">
                                             Iniciar Sesión
                                         </button>
                                     </div>
@@ -1020,19 +1126,19 @@
                                                 <div class="glass-light p-4 sm:p-6 rounded-2xl hover:shadow-lg transition-all">
                                                     <div class="flex items-start justify-between mb-3">
                                                         <div class="flex items-center gap-3">
-                                                            <div class="w-10 h-10 sm:w-12 sm:h-12 gradient-gold rounded-full flex items-center justify-center text-black font-bold text-base sm:text-lg">
+                                                            <div class="w-10 h-10 sm:w-12 sm:h-12 gradient-gold rounded-full flex items-center justify-center text-black font-bold text-base sm:text-lg flex-shrink-0">
                                                                 ${r.user_name.charAt(0).toUpperCase()}
                                                             </div>
                                                             <div>
-                                                                <p class="font-bold text-white">${r.user_name}</p>
+                                                                <p class="font-bold text-white break-words">${r.user_name}</p>
                                                                 <p class="text-xs text-gray-500">${new Date(r.created_at).toLocaleDateString('es-MX')}</p>
                                                             </div>
                                                         </div>
-                                                        <div class="flex gap-1 text-yellow-400 text-lg sm:text-xl">
+                                                        <div class="flex gap-1 text-yellow-400 text-lg sm:text-xl flex-shrink-0 ml-2">
                                                             ${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}
                                                         </div>
                                                     </div>
-                                                    ${r.comment ? `<p class="text-gray-300 leading-relaxed pl-0 sm:pl-15">${r.comment}</p>` : ''}
+                                                    ${r.comment ? `<p class="text-gray-300 leading-relaxed break-words">${r.comment}</p>` : ''}
                                                 </div>
                                             `).join('')}
                                         </div>
@@ -1064,7 +1170,6 @@
                     if (state.keepLoggedIn) localStorage.setItem('keepLoggedIn', 'true');
                     await loadBusinesses();
                     state.view = 'list';
-                    showModal('¡Bienvenido!', 'Has iniciado sesión correctamente', 'success');
                     render();
                 } else {
                     const err = getAuthErrorMessage(result.error);
@@ -1072,6 +1177,13 @@
                 }
             } else {
                 const confirmPassword = document.getElementById('confirmPassword').value;
+                
+                // Validación de contraseñas coincidentes
+                if (password !== confirmPassword) {
+                    showModal('Error', 'Las contraseñas no coinciden. Por favor verifica e intenta nuevamente.', 'error');
+                    return;
+                }
+                
                 const result = await registerUser(email, password, confirmPassword);
                 if (result.success) {
                     const msg = result.requiresConfirmation 
@@ -1121,7 +1233,6 @@
             const phoneInput = document.getElementById('phone').value.trim();
             const phoneDigits = phoneInput.replace(/\D/g, '');
             
-            // Validar que solo contenga números
             if (phoneInput !== phoneDigits) {
                 showModal('Error de Validación', 'Solo se permiten números en el campo de teléfono. Valida tu información por favor.', 'error');
                 return;
@@ -1152,24 +1263,31 @@
             await saveReview(businessId, state.selectedRating, comment);
         }
 
-        // Optimización MEJORADA: debounce perfeccionado
+        // OPTIMIZACIÓN CRÍTICA DE BÚSQUEDA - Sin refresh excesivo
         function handleSearchInput(e) {
-            if (isSearching) return;
-            
             const value = e.target.value;
-            clearTimeout(searchTimeout);
             
+            // Cancelar búsqueda anterior si existe
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            
+            // Solo actualizar después de 800ms de inactividad
             searchTimeout = setTimeout(() => {
-                state.searchTerm = value;
-                isSearching = true;
-                render();
-                setTimeout(() => { isSearching = false; }, 100);
-            }, 500);
+                if (lastSearchTerm !== value) {
+                    lastSearchTerm = value;
+                    state.searchTerm = value;
+                    render();
+                }
+            }, 800);
         }
 
         function handleSearchKeydown(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
+                if (searchTimeout) {
+                    clearTimeout(searchTimeout);
+                }
                 performSearch();
             }
         }
@@ -1177,9 +1295,15 @@
         function performSearch() {
             const input = document.getElementById('search');
             if (input) {
-                clearTimeout(searchTimeout);
-                state.searchTerm = input.value;
-                render();
+                if (searchTimeout) {
+                    clearTimeout(searchTimeout);
+                }
+                const value = input.value;
+                if (lastSearchTerm !== value) {
+                    lastSearchTerm = value;
+                    state.searchTerm = value;
+                    render();
+                }
             }
         }
 
@@ -1249,24 +1373,38 @@
         (async function init() {
             try {
                 const { data: { session } } = await supabaseClient.auth.getSession();
-                if (session) {
+                
+                // Verificar si viene de un reset de contraseña
+                const hashParams = new URLSearchParams(window.location.hash.substring(1));
+                const accessToken = hashParams.get('access_token');
+                const type = hashParams.get('type');
+                
+                if (type === 'recovery' && accessToken) {
+                    state.isPasswordReset = true;
+                    state.user = session?.user || null;
+                    showPasswordResetModal();
+                } else if (session) {
                     state.user = session.user;
                     state.view = 'list';
                     if (localStorage.getItem('keepLoggedIn')) state.keepLoggedIn = true;
                 }
+                
                 await loadBusinesses();
                 render();
 
                 supabaseClient.auth.onAuthStateChange((event, session) => {
-                    if (event === 'SIGNED_IN') {
+                    if (event === 'SIGNED_IN' && !state.isPasswordReset) {
                         state.user = session?.user || null;
                         state.view = 'list';
-                        showModal('¡Bienvenido!', 'Has iniciado sesión correctamente', 'success');
+                        // ELIMINADO: mensaje invasivo de "Bienvenido"
                         render();
                     } else if (event === 'SIGNED_OUT') {
                         state.user = null;
                         state.view = 'login';
                         render();
+                    } else if (event === 'PASSWORD_RECOVERY') {
+                        state.isPasswordReset = true;
+                        showPasswordResetModal();
                     }
                 });
             } catch (error) {
