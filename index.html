@@ -317,16 +317,51 @@
                 }
 
                 try {
-                    const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
-                    if (error) throw error;
+                    // Verificar que tengamos sesión primero
+                    const { data: { session: currentSession } } = await supabaseClient.auth.getSession();
+                    console.log('Sesión actual antes de actualizar:', currentSession);
+                    
+                    if (!currentSession) {
+                        // Intentar refrescar la sesión desde el hash de la URL
+                        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+                        const accessToken = hashParams.get('access_token');
+                        const refreshToken = hashParams.get('refresh_token');
+                        
+                        if (accessToken) {
+                            console.log('Intentando establecer sesión con token del hash');
+                            const { error: sessionError } = await supabaseClient.auth.setSession({
+                                access_token: accessToken,
+                                refresh_token: refreshToken || ''
+                            });
+                            
+                            if (sessionError) {
+                                console.error('Error estableciendo sesión:', sessionError);
+                                throw new Error('No se pudo establecer la sesión. Por favor, solicita un nuevo enlace de recuperación.');
+                            }
+                        } else {
+                            throw new Error('Sesión expirada. Por favor, solicita un nuevo enlace de recuperación.');
+                        }
+                    }
+                    
+                    // Ahora sí, actualizar la contraseña
+                    const { data: updateData, error: updateError } = await supabaseClient.auth.updateUser({ 
+                        password: newPassword 
+                    });
+                    
+                    console.log('Resultado de actualización:', updateData, updateError);
+                    
+                    if (updateError) throw updateError;
+                    
                     modal.remove();
                     showModal('¡Contraseña Actualizada!', 'Tu contraseña ha sido cambiada exitosamente. Ahora puedes iniciar sesión con tu nueva contraseña.', 'success');
                     state.isPasswordReset = false;
+                    
                     setTimeout(() => {
                         logoutUser();
                     }, 2000);
                 } catch (error) {
-                    showModal('Error', error.message, 'error');
+                    console.error('Error completo:', error);
+                    showModal('Error al Actualizar', error.message || 'Ocurrió un error al actualizar la contraseña. Intenta solicitar un nuevo enlace.', 'error');
                 }
             });
         }
@@ -1550,22 +1585,43 @@
                 // PRIMERO: Verificar si viene de un reset de contraseña (ANTES de getSession)
                 const hashParams = new URLSearchParams(window.location.hash.substring(1));
                 const accessToken = hashParams.get('access_token');
+                const refreshToken = hashParams.get('refresh_token');
                 const type = hashParams.get('type');
                 
                 // También verificar error_code y error_description por si Supabase los envía
                 const errorCode = hashParams.get('error_code');
                 const errorDescription = hashParams.get('error_description');
                 
-                console.log('Hash params:', { type, accessToken, errorCode, errorDescription });
+                console.log('Hash params completos:', { 
+                    type, 
+                    accessToken: accessToken ? 'presente' : 'ausente',
+                    refreshToken: refreshToken ? 'presente' : 'ausente',
+                    errorCode, 
+                    errorDescription,
+                    fullHash: window.location.hash
+                });
                 
                 if (type === 'recovery' || (accessToken && window.location.hash.includes('recovery'))) {
                     state.isPasswordReset = true;
-                    // Esperar a que la sesión se establezca
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    const { data: { session } } = await supabaseClient.auth.getSession();
-                    state.user = session?.user || null;
-                    // Limpiar la URL
-                    window.history.replaceState(null, '', window.location.pathname);
+                    
+                    // Establecer la sesión con los tokens del hash
+                    if (accessToken) {
+                        console.log('Estableciendo sesión con tokens de recovery...');
+                        const { data: sessionData, error: sessionError } = await supabaseClient.auth.setSession({
+                            access_token: accessToken,
+                            refresh_token: refreshToken || ''
+                        });
+                        
+                        if (sessionError) {
+                            console.error('Error estableciendo sesión:', sessionError);
+                        } else {
+                            console.log('Sesión establecida correctamente:', sessionData);
+                            state.user = sessionData.session?.user || null;
+                        }
+                    }
+                    
+                    // NO limpiar la URL todavía - la necesitamos para el modal
+                    // window.history.replaceState(null, '', window.location.pathname);
                     showPasswordResetModal();
                     return; // Salir temprano para no cargar la vista normal
                 }
@@ -1591,8 +1647,6 @@
                     if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && isRecoveryUrl)) {
                         state.isPasswordReset = true;
                         state.user = session?.user || null;
-                        // Limpiar la URL
-                        window.history.replaceState(null, '', window.location.pathname);
                         showPasswordResetModal();
                     } else if (event === 'SIGNED_IN' && !state.isPasswordReset) {
                         state.user = session?.user || null;
@@ -1602,6 +1656,8 @@
                     } else if (event === 'SIGNED_OUT') {
                         state.user = null;
                         state.view = 'login';
+                        // Limpiar la URL cuando cerramos sesión
+                        window.history.replaceState(null, '', window.location.pathname);
                         render();
                     }
                 });
