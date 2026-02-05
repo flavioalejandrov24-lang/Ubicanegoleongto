@@ -560,9 +560,16 @@
         async function resetPassword(email) {
             try {
                 if (!isValidEmail(email)) throw new Error('invalid format');
-                const { error } = await supabaseClient.auth.resetPasswordForEmail(email.toLowerCase().trim(), {
-                    redirectTo: `${window.location.origin}${window.location.pathname}`
-                });
+                
+                // Construir URL completa con hash para recovery
+                const redirectUrl = `${window.location.origin}${window.location.pathname}#recovery`;
+                
+                const { error } = await supabaseClient.auth.resetPasswordForEmail(
+                    email.toLowerCase().trim(), 
+                    {
+                        redirectTo: redirectUrl
+                    }
+                );
                 if (error) throw error;
                 return { success: true };
             } catch (error) {
@@ -1540,20 +1547,32 @@
         // ========== INICIALIZACIÓN ==========
         (async function init() {
             try {
-                const { data: { session } } = await supabaseClient.auth.getSession();
-                
-                // Verificar si viene de un reset de contraseña
+                // PRIMERO: Verificar si viene de un reset de contraseña (ANTES de getSession)
                 const hashParams = new URLSearchParams(window.location.hash.substring(1));
                 const accessToken = hashParams.get('access_token');
                 const type = hashParams.get('type');
                 
-                if (type === 'recovery' && accessToken) {
+                // También verificar error_code y error_description por si Supabase los envía
+                const errorCode = hashParams.get('error_code');
+                const errorDescription = hashParams.get('error_description');
+                
+                console.log('Hash params:', { type, accessToken, errorCode, errorDescription });
+                
+                if (type === 'recovery' || (accessToken && window.location.hash.includes('recovery'))) {
                     state.isPasswordReset = true;
+                    // Esperar a que la sesión se establezca
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    const { data: { session } } = await supabaseClient.auth.getSession();
                     state.user = session?.user || null;
                     // Limpiar la URL
                     window.history.replaceState(null, '', window.location.pathname);
                     showPasswordResetModal();
-                } else if (session) {
+                    return; // Salir temprano para no cargar la vista normal
+                }
+                
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                
+                if (session) {
                     state.user = session.user;
                     state.view = 'list';
                     if (localStorage.getItem('keepLoggedIn')) state.keepLoggedIn = true;
@@ -1562,21 +1581,32 @@
                 await loadBusinesses();
                 render();
 
-                supabaseClient.auth.onAuthStateChange((event, session) => {
-                    if (event === 'SIGNED_IN' && !state.isPasswordReset) {
+                supabaseClient.auth.onAuthStateChange(async (event, session) => {
+                    console.log('Auth state changed:', event, session);
+                    
+                    // Detectar si hay parámetros de recovery en la URL
+                    const currentHash = window.location.hash;
+                    const isRecoveryUrl = currentHash.includes('type=recovery') || currentHash.includes('#recovery');
+                    
+                    if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && isRecoveryUrl)) {
+                        state.isPasswordReset = true;
+                        state.user = session?.user || null;
+                        // Limpiar la URL
+                        window.history.replaceState(null, '', window.location.pathname);
+                        showPasswordResetModal();
+                    } else if (event === 'SIGNED_IN' && !state.isPasswordReset) {
                         state.user = session?.user || null;
                         state.view = 'list';
+                        await loadBusinesses();
                         render();
                     } else if (event === 'SIGNED_OUT') {
                         state.user = null;
                         state.view = 'login';
                         render();
-                    } else if (event === 'PASSWORD_RECOVERY') {
-                        state.isPasswordReset = true;
-                        showPasswordResetModal();
                     }
                 });
             } catch (error) {
+                console.error('Error de inicialización:', error);
                 showModal('Error de Inicialización', 'Ocurrió un error al cargar la aplicación', 'error');
             }
         })();
