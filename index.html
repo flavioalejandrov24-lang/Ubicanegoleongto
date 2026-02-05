@@ -61,6 +61,18 @@
         .gradient-gold {
             background: linear-gradient(135deg, #d4af37 0%, #aa8a2e 100%);
         }
+
+        .gradient-green {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.7) 0%, rgba(22, 163, 74, 0.7) 100%);
+        }
+
+        .gradient-white-translucent {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.6) 100%);
+        }
+
+        .gradient-navy-blue {
+            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #ffffff 100%);
+        }
         
         .input-focus {
             transition: all 0.3s ease;
@@ -111,6 +123,29 @@
                 transform: scale(1) translateY(0); 
             }
         }
+
+        /* Estilos para preview de imagen */
+        .image-upload-container {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .image-upload-container:hover {
+            transform: scale(1.02);
+            border-color: rgba(212, 175, 55, 0.5);
+        }
+
+        .image-preview-logo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Descripción con formato */
+        .description-text {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
     </style>
 </head>
 <body>
@@ -136,10 +171,13 @@
             selectedRating: 0,
             showPassword: {},
             formData: {
-                name: '', representative: '', category: '', address: '', phone: '+52 477 ', 
+                name: '', representative: '', category: '', address: '', phone: '', 
                 hours: '', days: 'Lunes a Viernes', description: '', logo: null, logo_url: '', agreed: false
             }
         };
+
+        // Prevenir re-renderizado en búsqueda
+        let searchTimeout = null;
 
         // ========== MODAL MODERNO ==========
         function showModal(title, message, type = 'error') {
@@ -299,8 +337,10 @@
                 return;
             }
             
-            if (!/^\+52\s?477\s?\d{3}\s?\d{4}$/.test(formData.phone)) {
-                showModal('Teléfono Inválido', 'El teléfono debe tener formato: +52 477 XXX XXXX', 'error');
+            // Validación mejorada de teléfono (solo números, máximo 16 caracteres)
+            const phoneDigits = formData.phone.replace(/\D/g, '');
+            if (phoneDigits.length === 0 || phoneDigits.length > 16) {
+                showModal('Teléfono Inválido', 'El teléfono debe contener entre 1 y 16 números', 'error');
                 return;
             }
 
@@ -321,7 +361,7 @@
                     name: formData.name.trim(),
                     representative: formData.representative.trim() || null,
                     category: formData.category.trim() || null,
-                    address: formData.address.trim(),
+                    address: formData.address.trim() || null,
                     phone: formData.phone.trim(),
                     hours: formData.hours.trim() || null,
                     days: formData.days,
@@ -393,23 +433,22 @@
         // ========== HELPERS ==========
         function resetForm() {
             state.formData = {
-                name: '', representative: '', category: '', address: '', phone: '+52 477 ', 
+                name: '', representative: '', category: '', address: '', phone: '', 
                 hours: '', days: 'Lunes a Viernes', description: '', logo: null, logo_url: '', agreed: false
             };
         }
 
         function togglePassword(id) {
-    state.showPassword[id] = !state.showPassword[id];
-    const input = document.getElementById(id);
-    if (input) {
-        input.type = state.showPassword[id] ? 'text' : 'password';
-    }
-    // Actualizar solo el ícono del botón
-    const button = input?.nextElementSibling?.querySelector('i');
-    if (button) {
-        button.className = `fas fa-eye${state.showPassword[id] ? '-slash' : ''}`;
-    }
-}
+            state.showPassword[id] = !state.showPassword[id];
+            const input = document.getElementById(id);
+            if (input) {
+                input.type = state.showPassword[id] ? 'text' : 'password';
+            }
+            const button = input?.nextElementSibling?.querySelector('i');
+            if (button) {
+                button.className = `fas fa-eye${state.showPassword[id] ? '-slash' : ''}`;
+            }
+        }
 
         setInterval(() => {
             state.viewCount += Math.floor(Math.random() * 5) + 1;
@@ -420,42 +459,39 @@
         // ========== COMPONENTES ==========
         const Header = () => `
             <header class="glass sticky top-0 z-40 shadow-2xl">
-                <div class="max-w-7xl mx-auto px-6 py-4">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4">
                     <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-4 slide-in">
-                            <div class="w-12 h-12 gradient-gold rounded-2xl flex items-center justify-center shadow-lg">
-                                <i class="fas fa-store text-2xl text-black"></i>
-                            </div>
+                        <div class="flex items-center gap-3 slide-in">
                             <div>
-                                <h1 class="text-2xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">Ubicanegoleon</h1>
+                                <h1 class="text-xl sm:text-2xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">Ubicanegoleon</h1>
                                 <p class="text-xs text-gray-400">León, Guanajuato</p>
                             </div>
                         </div>
                         
-                        <nav class="flex items-center gap-3">
+                        <nav class="flex items-center gap-2 sm:gap-3">
                             ${state.view !== 'login' && state.view !== 'register' ? `
-                                <button onclick="changeView('list')" class="p-3 rounded-xl transition-all ${state.view === 'list' ? 'bg-yellow-500/20 text-yellow-400' : 'text-gray-400 hover:bg-gray-800'}">
-                                    <i class="fas fa-home text-lg"></i>
+                                <button onclick="changeView('list')" class="p-2 sm:p-3 rounded-xl transition-all ${state.view === 'list' ? 'bg-yellow-500/20 text-yellow-400' : 'text-gray-400 hover:bg-gray-800'}">
+                                    <i class="fas fa-home text-base sm:text-lg"></i>
                                 </button>
                             ` : ''}
                             
                             ${state.user ? `
-                                <button onclick="createBusiness()" class="btn-gold text-black px-5 py-3 rounded-xl font-semibold shadow-lg hidden md:flex items-center gap-2">
+                                <button onclick="createBusiness()" class="gradient-green text-white px-3 sm:px-5 py-2 sm:py-3 rounded-xl font-semibold shadow-lg hidden md:flex items-center gap-2 hover:opacity-90 transition-all">
                                     <i class="fas fa-plus"></i><span>Registrar Negocio</span>
                                 </button>
-                                <button onclick="createBusiness()" class="btn-gold text-black p-3 rounded-xl shadow-lg md:hidden">
+                                <button onclick="createBusiness()" class="gradient-green text-white p-2 sm:p-3 rounded-xl shadow-lg md:hidden hover:opacity-90 transition-all">
                                     <i class="fas fa-plus"></i>
                                 </button>
                                 <div class="relative group">
-                                    <button class="flex items-center gap-2 px-4 py-2 rounded-xl hover:bg-gray-800 transition-all">
-                                        <div class="w-8 h-8 gradient-gold rounded-full flex items-center justify-center text-black font-bold text-sm">
+                                    <button class="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl hover:bg-gray-800 transition-all">
+                                        <div class="w-7 h-7 sm:w-8 sm:h-8 gradient-gold rounded-full flex items-center justify-center text-black font-bold text-xs sm:text-sm">
                                             ${state.user.email.charAt(0).toUpperCase()}
                                         </div>
-                                        <i class="fas fa-chevron-down text-xs text-gray-400"></i>
+                                        <i class="fas fa-chevron-down text-xs text-gray-400 hidden sm:block"></i>
                                     </button>
                                     <div class="absolute right-0 mt-2 w-56 glass rounded-2xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                                         <div class="p-4 border-b border-gray-700">
-                                            <p class="text-sm font-semibold text-white">${state.user.email}</p>
+                                            <p class="text-sm font-semibold text-white truncate">${state.user.email}</p>
                                             <p class="text-xs text-gray-400 mt-1">Usuario registrado</p>
                                         </div>
                                         <button onclick="logoutUser()" class="w-full px-4 py-3 text-left text-red-400 hover:bg-red-500/10 rounded-b-2xl transition-all flex items-center gap-3">
@@ -465,7 +501,7 @@
                                 </div>
                             ` : `
                                 ${state.view !== 'login' && state.view !== 'register' ? `
-                                    <button onclick="changeView('login')" class="px-5 py-2.5 text-yellow-400 hover:bg-yellow-500/10 rounded-xl font-semibold transition-all">Iniciar Sesión</button>
+                                    <button onclick="changeView('login')" class="px-3 sm:px-5 py-2 sm:py-2.5 text-yellow-400 hover:bg-yellow-500/10 rounded-xl font-semibold transition-all text-sm sm:text-base">Iniciar Sesión</button>
                                 ` : ''}
                             `}
                         </nav>
@@ -475,14 +511,14 @@
         `;
 
         const Footer = () => `
-            <div class="fixed bottom-0 left-0 right-0 glass border-t border-yellow-500/20 py-4 z-40 shadow-2xl">
-                <div class="max-w-7xl mx-auto px-6">
-                    <div class="flex items-center justify-center gap-3">
-                        <div class="w-10 h-10 gradient-gold rounded-full flex items-center justify-center pulse-slow shadow-lg">
-                            <i class="fas fa-users text-black"></i>
+            <div class="fixed bottom-0 left-0 right-0 glass border-t border-yellow-500/20 py-3 sm:py-4 z-50 shadow-2xl">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6">
+                    <div class="flex items-center justify-center gap-2 sm:gap-3">
+                        <div class="w-8 h-8 sm:w-10 sm:h-10 gradient-gold rounded-full flex items-center justify-center pulse-slow shadow-lg">
+                            <i class="fas fa-users text-black text-sm sm:text-base"></i>
                         </div>
-                        <p class="text-gray-300 font-medium">
-                            Tu negocio puede alcanzar <span class="text-yellow-400 font-bold text-lg" id="view-counter">${state.viewCount.toLocaleString()}</span> <span class="text-gray-500">usuarios</span>
+                        <p class="text-gray-300 font-medium text-xs sm:text-base">
+                            Tu negocio puede alcanzar <span class="text-yellow-400 font-bold text-sm sm:text-lg" id="view-counter">${state.viewCount.toLocaleString()}</span> <span class="text-gray-500">usuarios</span>
                         </p>
                     </div>
                 </div>
@@ -571,12 +607,12 @@
         };
 
         const FormView = () => `
-            <div class="pb-28 min-h-screen">
+            <div class="pb-24 sm:pb-28 min-h-screen">
                 ${Header()}
-                <div class="max-w-4xl mx-auto mt-10 px-6">
-                    <div class="glass p-10 rounded-3xl shadow-xl fade-in border-2 border-yellow-500/20">
+                <div class="max-w-4xl mx-auto mt-6 sm:mt-10 px-4 sm:px-6">
+                    <div class="glass p-6 sm:p-10 rounded-3xl shadow-xl fade-in border-2 border-yellow-500/20">
                         <div class="mb-8">
-                            <h2 class="text-3xl font-bold text-white mb-2">
+                            <h2 class="text-2xl sm:text-3xl font-bold text-white mb-2">
                                 <i class="fas fa-${state.currentBusiness ? 'edit' : 'plus-circle'} text-yellow-400 mr-3"></i>
                                 ${state.currentBusiness ? 'Modificar Negocio' : 'Registrar Nuevo Negocio'}
                             </h2>
@@ -588,18 +624,21 @@
                                 <label class="block text-sm font-bold text-gray-300 mb-3">
                                     <i class="fas fa-image text-yellow-400 mr-2"></i>Logotipo del Negocio
                                 </label>
-                                <div class="flex items-center gap-6">
-                                    ${state.formData.logo_url ? `
-                                        <img src="${state.formData.logo_url}" class="w-32 h-32 object-cover rounded-2xl shadow-lg border-4 border-gray-700">
-                                    ` : `
-                                        <div class="w-32 h-32 bg-gray-800 rounded-2xl flex items-center justify-center border-2 border-dashed border-gray-600">
-                                            <i class="fas fa-image text-4xl text-gray-600"></i>
-                                        </div>
-                                    `}
-                                    <div class="flex-1">
-                                        <input type="file" id="logo" accept="image/*" onchange="handleLogo(event)"
-                                            class="w-full p-3 border-2 border-gray-700 bg-gray-900/50 text-gray-300 rounded-xl file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-yellow-500/20 file:text-yellow-400 file:font-semibold hover:file:bg-yellow-500/30">
-                                        <p class="text-xs text-gray-500 mt-2">Formatos: JPG, PNG (Máx. 10MB)</p>
+                                <div class="flex flex-col sm:flex-row items-center gap-6">
+                                    <div class="w-full sm:w-40 h-40 image-upload-container rounded-2xl border-2 border-dashed border-gray-600 overflow-hidden bg-gray-800 flex items-center justify-center cursor-pointer hover:border-yellow-500/50 transition-all" onclick="document.getElementById('logo-input').click()">
+                                        ${state.formData.logo_url ? `
+                                            <img src="${state.formData.logo_url}" class="image-preview-logo" alt="Preview">
+                                        ` : `
+                                            <div class="text-center">
+                                                <i class="fas fa-cloud-upload-alt text-5xl text-gray-600 mb-2"></i>
+                                                <p class="text-xs text-gray-500">Click para subir</p>
+                                            </div>
+                                        `}
+                                    </div>
+                                    <input type="file" id="logo-input" accept="image/*" onchange="handleLogo(event)" class="hidden">
+                                    <div class="flex-1 text-center sm:text-left">
+                                        <p class="text-sm text-gray-400 mb-2">Formatos: JPG, PNG (Máx. 10MB)</p>
+                                        <p class="text-xs text-gray-600">Haz click en el recuadro para seleccionar una imagen</p>
                                     </div>
                                 </div>
                             </div>
@@ -609,15 +648,22 @@
                                     { id: 'name', label: 'Nombre del Negocio *', icon: 'store', placeholder: 'Ej: Café La Esquina', required: true },
                                     { id: 'representative', label: 'Representante', icon: 'user-tie', placeholder: 'Nombre del dueño' },
                                     { id: 'category', label: 'Giro del Negocio', icon: 'tag', placeholder: 'Ej: Restaurante' },
-                                    { id: 'address', label: 'Dirección *', icon: 'map-marker-alt', placeholder: 'Calle, número, colonia', required: true },
-                                    { id: 'phone', label: 'Teléfono *', icon: 'phone', placeholder: '+52 477 XXX XXXX', required: true },
+                                    { id: 'address', label: 'Dirección', icon: 'map-marker-alt', placeholder: 'Calle, número, colonia' },
+                                    { id: 'phone', label: 'Teléfono *', icon: 'phone', placeholder: 'Ej: 4771234567', required: true, type: 'tel' },
                                     { id: 'hours', label: 'Horario', icon: 'clock', placeholder: '9:00 AM - 7:00 PM' }
                                 ].map(f => `
                                     <div>
                                         <label class="block text-sm font-bold text-gray-300 mb-2">
                                             <i class="fas fa-${f.icon} text-yellow-400 mr-2"></i>${f.label}
                                         </label>
-                                        <input type="text" id="${f.id}" ${f.required ? 'required' : ''} value="${state.formData[f.id]}" placeholder="${f.placeholder}"
+                                        <input 
+                                            type="${f.type || 'text'}" 
+                                            id="${f.id}" 
+                                            ${f.required ? 'required' : ''} 
+                                            value="${state.formData[f.id]}" 
+                                            placeholder="${f.placeholder}"
+                                            ${f.id === 'phone' ? 'inputmode="numeric" pattern="[0-9]*" maxlength="16"' : ''}
+                                            oninput="${f.id === 'phone' ? 'this.value = this.value.replace(/[^0-9]/g, \'\').slice(0, 16)' : ''}"
                                             class="w-full px-4 py-3 border-2 border-gray-700 bg-gray-900/50 text-white rounded-xl focus:border-yellow-500 focus:ring-4 focus:ring-yellow-500/20 outline-none input-focus">
                                     </div>
                                 `).join('')}
@@ -661,7 +707,7 @@
                                 </div>
                             </label>
 
-                            <div class="flex gap-4 pt-4">
+                            <div class="flex flex-col sm:flex-row gap-4 pt-4">
                                 <button type="button" onclick="changeView('list')" 
                                     class="flex-1 py-4 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-bold transition-all">
                                     <i class="fas fa-times mr-2"></i>Cancelar
@@ -684,26 +730,31 @@
             );
 
             return `
-                <div class="pb-28 min-h-screen">
+                <div class="pb-20 sm:pb-28 min-h-screen">
                     ${Header()}
                     
-                    <div class="glass border-b border-yellow-500/20 py-8 px-6 mb-10 shadow-lg">
+                    <div class="glass border-b border-yellow-500/20 py-6 sm:py-8 px-4 sm:px-6 mb-6 sm:mb-10 shadow-lg">
                         <div class="max-w-7xl mx-auto">
                             <div class="text-center mb-6 slide-in">
-                                <h2 class="text-3xl font-bold text-white mb-2">Descubre Negocios en León</h2>
+                                <h2 class="text-2xl sm:text-3xl font-bold text-white mb-2">Descubre Negocios en León</h2>
                                 <p class="text-gray-400">Encuentra los mejores establecimientos cerca de ti</p>
                             </div>
                             
-                            <div class="relative max-w-2xl mx-auto fade-in">
-                                <i class="fas fa-search absolute left-6 top-1/2 transform -translate-y-1/2 text-gray-500 text-xl"></i>
-                                <input type="text" id="search" value="${state.searchTerm}" onkeyup="handleSearch(event)"
-                                    placeholder="Busca por nombre o giro del negocio..." 
-                                    class="w-full pl-16 pr-6 py-5 rounded-2xl bg-gray-900/50 border-2 border-gray-700 text-white focus:border-yellow-500 focus:ring-4 focus:ring-yellow-500/20 outline-none input-focus text-lg shadow-lg">
+                            <div class="relative max-w-2xl mx-auto fade-in flex gap-3">
+                                <div class="relative flex-1">
+                                    <i class="fas fa-search absolute left-4 sm:left-6 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg sm:text-xl"></i>
+                                    <input type="text" id="search" value="${state.searchTerm}" oninput="handleSearchInput(event)"
+                                        placeholder="Busca por nombre o giro..." 
+                                        class="w-full pl-12 sm:pl-16 pr-4 sm:pr-6 py-4 sm:py-5 rounded-2xl bg-white/80 backdrop-blur-sm border-2 border-gray-300 text-gray-900 placeholder-gray-500 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-500/20 outline-none input-focus text-base sm:text-lg shadow-lg">
+                                </div>
+                                <button onclick="performSearch()" class="gradient-navy-blue text-white px-6 sm:px-8 py-4 sm:py-5 rounded-2xl font-bold shadow-lg hover:opacity-90 transition-all whitespace-nowrap">
+                                    <i class="fas fa-search mr-2"></i><span class="hidden sm:inline">Buscar</span>
+                                </button>
                             </div>
                         </div>
                     </div>
 
-                    <main class="max-w-7xl mx-auto px-6">
+                    <main class="max-w-7xl mx-auto px-4 sm:px-6">
                         ${filtered.length === 0 ? `
                             <div class="text-center py-20 fade-in">
                                 <div class="w-32 h-32 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -718,15 +769,15 @@
                                 ` : ''}
                             </div>
                         ` : `
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
                                 ${filtered.map((b, i) => `
                                     <div class="glass rounded-3xl overflow-hidden shadow-lg card-hover fade-in border border-yellow-500/10" style="animation-delay: ${i * 0.1}s">
-                                        <div class="h-56 overflow-hidden relative bg-gradient-to-br from-gray-800 to-gray-900">
+                                        <div class="h-48 sm:h-56 overflow-hidden relative bg-gradient-to-br from-gray-800 to-gray-900">
                                             <img src="${b.logo_url || 'https://via.placeholder.com/400x300/1a1a1a/d4af37?text=Sin+Logo'}" 
                                                 class="w-full h-full object-cover"
                                                 onerror="this.src='https://via.placeholder.com/400x300/1a1a1a/d4af37?text=Negocio'">
                                             <div class="absolute top-4 right-4">
-                                                <span class="px-4 py-2 glass-light rounded-full text-xs font-bold text-yellow-400 shadow-lg">
+                                                <span class="px-3 sm:px-4 py-1.5 sm:py-2 glass-light rounded-full text-xs font-bold text-yellow-400 shadow-lg">
                                                     ${b.category || 'Negocio'}
                                                 </span>
                                             </div>
@@ -743,8 +794,8 @@
                                             ` : ''}
                                         </div>
                                         
-                                        <div class="p-6">
-                                            <h3 class="text-xl font-bold text-white mb-3 line-clamp-1">${b.name}</h3>
+                                        <div class="p-5 sm:p-6">
+                                            <h3 class="text-lg sm:text-xl font-bold text-white mb-3 line-clamp-1">${b.name}</h3>
                                             
                                             <div class="space-y-2 mb-5">
                                                 <p class="text-sm text-gray-400 flex items-start gap-2">
@@ -761,7 +812,7 @@
 
                                             <div class="flex gap-3">
                                                 <button onclick="viewBusiness('${b.id}')" 
-                                                    class="flex-1 py-3 gradient-gold text-black rounded-xl font-semibold hover:shadow-xl transition-all">
+                                                    class="flex-1 py-3 gradient-white-translucent text-black font-bold rounded-xl hover:shadow-xl transition-all">
                                                     Ver Detalles
                                                 </button>
                                                 ${state.user && b.user_id === state.user.id ? `
@@ -787,31 +838,31 @@
             if (!b) return '';
 
             return `
-                <div class="pb-28 min-h-screen">
+                <div class="pb-20 sm:pb-28 min-h-screen">
                     ${Header()}
-                    <div class="max-w-5xl mx-auto mt-10 px-6">
+                    <div class="max-w-5xl mx-auto mt-6 sm:mt-10 px-4 sm:px-6">
                         <div class="glass rounded-3xl overflow-hidden shadow-2xl fade-in border-2 border-yellow-500/20">
-                            <div class="h-64 bg-gradient-to-br from-yellow-600 via-yellow-500 to-yellow-400 relative overflow-hidden">
+                            <div class="h-48 sm:h-64 bg-gradient-to-br from-yellow-600 via-yellow-500 to-yellow-400 relative overflow-hidden">
                                 <div class="absolute inset-0 bg-black/20"></div>
                                 <button onclick="changeView('list')" 
-                                    class="absolute top-6 left-6 w-12 h-12 glass-light rounded-xl flex items-center justify-center text-white hover:bg-white/20 transition-all shadow-lg z-10">
-                                    <i class="fas fa-arrow-left text-xl"></i>
+                                    class="absolute top-4 sm:top-6 left-4 sm:left-6 w-10 h-10 sm:w-12 sm:h-12 glass-light rounded-xl flex items-center justify-center text-white hover:bg-white/20 transition-all shadow-lg z-10">
+                                    <i class="fas fa-arrow-left text-lg sm:text-xl"></i>
                                 </button>
                                 
-                                <div class="absolute -bottom-20 left-8">
+                                <div class="absolute -bottom-16 sm:-bottom-20 left-4 sm:left-8">
                                     <div class="p-2 glass rounded-3xl shadow-2xl">
                                         <img src="${b.logo_url || 'https://via.placeholder.com/160/d4af37/000000?text=Logo'}" 
-                                            class="w-40 h-40 rounded-2xl object-cover"
+                                            class="w-32 h-32 sm:w-40 sm:h-40 rounded-2xl object-cover"
                                             onerror="this.src='https://via.placeholder.com/160/d4af37/000000?text=Logo'">
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="pt-24 px-8 pb-10">
+                            <div class="pt-20 sm:pt-24 px-4 sm:px-8 pb-6 sm:pb-10">
                                 <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-8">
                                     <div class="flex-1">
-                                        <h2 class="text-4xl font-bold text-white mb-2">${b.name}</h2>
-                                        <p class="text-yellow-400 font-semibold text-lg flex items-center gap-2">
+                                        <h2 class="text-3xl sm:text-4xl font-bold text-white mb-2">${b.name}</h2>
+                                        <p class="text-yellow-400 font-semibold text-base sm:text-lg flex items-center gap-2">
                                             <i class="fas fa-tag"></i>${b.category || 'Negocio'}
                                         </p>
                                     </div>
@@ -832,6 +883,7 @@
                                                 <i class="fas fa-info-circle mr-2"></i>Información de Contacto
                                             </h4>
                                             <div class="space-y-3">
+                                                ${b.phone ? `
                                                 <div class="flex items-center gap-4 p-4 glass-light rounded-2xl hover:shadow-md transition-all">
                                                     <div class="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
                                                         <i class="fas fa-phone text-yellow-400 text-xl"></i>
@@ -841,7 +893,9 @@
                                                         <p class="font-semibold text-white">${b.phone}</p>
                                                     </div>
                                                 </div>
+                                                ` : ''}
                                                 
+                                                ${b.address ? `
                                                 <div class="flex items-start gap-4 p-4 glass-light rounded-2xl hover:shadow-md transition-all">
                                                     <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
                                                         <i class="fas fa-map-marked-alt text-red-400 text-xl"></i>
@@ -851,6 +905,7 @@
                                                         <p class="font-semibold text-white">${b.address}, León, Gto.</p>
                                                     </div>
                                                 </div>
+                                                ` : ''}
                                             </div>
                                         </section>
 
@@ -872,14 +927,31 @@
                                     </div>
 
                                     <div class="space-y-6">
-                                        <section>
-                                            <h4 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">
-                                                <i class="fas fa-file-alt mr-2"></i>Descripción
-                                            </h4>
-                                            <div class="glass-light p-6 rounded-2xl border-l-4 border-yellow-500">
-                                                <p class="text-gray-300 leading-relaxed">${b.description || 'Sin descripción disponible.'}</p>
-                                            </div>
-                                        </section>
+                                        ${b.rating > 0 ? `
+                                            <section>
+                                                <h4 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">
+                                                    <i class="fas fa-star mr-2"></i>Calificación
+                                                </h4>
+                                                <div class="glass-light p-6 rounded-2xl">
+                                                    <div class="flex items-center gap-2 text-3xl font-bold text-white mb-2">
+                                                        <i class="fas fa-star text-yellow-400"></i>
+                                                        <span>${b.rating}</span>
+                                                    </div>
+                                                    <p class="text-sm text-gray-400">${b.total_ratings} ${b.total_ratings === 1 ? 'reseña' : 'reseñas'}</p>
+                                                </div>
+                                            </section>
+                                        ` : ''}
+
+                                        ${b.description ? `
+                                            <section>
+                                                <h4 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">
+                                                    <i class="fas fa-file-alt mr-2"></i>Descripción
+                                                </h4>
+                                                <div class="glass-light p-6 rounded-2xl border-l-4 border-yellow-500">
+                                                    <p class="text-gray-300 leading-relaxed description-text font-semibold">${b.description}</p>
+                                                </div>
+                                            </section>
+                                        ` : ''}
 
                                         ${b.representative ? `
                                             <section>
@@ -902,18 +974,18 @@
                                 </div>
 
                                 ${state.user ? `
-                                    <div class="glass-light p-8 rounded-3xl border-2 border-yellow-500/20 mb-10">
-                                        <h4 class="text-2xl font-bold text-white mb-6">
+                                    <div class="glass-light p-6 sm:p-8 rounded-3xl border-2 border-yellow-500/20 mb-10">
+                                        <h4 class="text-xl sm:text-2xl font-bold text-white mb-6">
                                             <i class="fas fa-star text-yellow-400 mr-2"></i>Deja tu opinión
                                         </h4>
                                         
                                         <form onsubmit="handleReview(event, '${b.id}')" class="space-y-6">
                                             <div>
                                                 <label class="block text-sm font-bold text-gray-300 mb-3">Calificación</label>
-                                                <div class="flex gap-3">
+                                                <div class="flex gap-2 sm:gap-3">
                                                     ${[1,2,3,4,5].map(i => `
                                                         <button type="button" onclick="selectRating(${i})" 
-                                                            class="star-btn text-5xl transition-all hover:scale-110" data-rating="${i}">
+                                                            class="star-btn text-4xl sm:text-5xl transition-all hover:scale-110" data-rating="${i}">
                                                             <span class="text-gray-600">★</span>
                                                         </button>
                                                     `).join('')}
@@ -942,17 +1014,17 @@
                                 `}
 
                                 <div class="border-t-2 border-gray-800 pt-10">
-                                    <h4 class="text-2xl font-bold text-white mb-6">
+                                    <h4 class="text-xl sm:text-2xl font-bold text-white mb-6">
                                         <i class="fas fa-comments text-yellow-400 mr-2"></i>Reseñas (${b.reviews?.length || 0})
                                     </h4>
                                     
                                     ${(b.reviews && b.reviews.length > 0) ? `
                                         <div class="space-y-4">
                                             ${b.reviews.map(r => `
-                                                <div class="glass-light p-6 rounded-2xl hover:shadow-lg transition-all">
+                                                <div class="glass-light p-4 sm:p-6 rounded-2xl hover:shadow-lg transition-all">
                                                     <div class="flex items-start justify-between mb-3">
                                                         <div class="flex items-center gap-3">
-                                                            <div class="w-12 h-12 gradient-gold rounded-full flex items-center justify-center text-black font-bold text-lg">
+                                                            <div class="w-10 h-10 sm:w-12 sm:h-12 gradient-gold rounded-full flex items-center justify-center text-black font-bold text-base sm:text-lg">
                                                                 ${r.user_name.charAt(0).toUpperCase()}
                                                             </div>
                                                             <div>
@@ -960,11 +1032,11 @@
                                                                 <p class="text-xs text-gray-500">${new Date(r.created_at).toLocaleDateString('es-MX')}</p>
                                                             </div>
                                                         </div>
-                                                        <div class="flex gap-1 text-yellow-400 text-xl">
+                                                        <div class="flex gap-1 text-yellow-400 text-lg sm:text-xl">
                                                             ${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}
                                                         </div>
                                                     </div>
-                                                    ${r.comment ? `<p class="text-gray-300 leading-relaxed pl-15">${r.comment}</p>` : ''}
+                                                    ${r.comment ? `<p class="text-gray-300 leading-relaxed pl-0 sm:pl-15">${r.comment}</p>` : ''}
                                                 </div>
                                             `).join('')}
                                         </div>
@@ -1049,13 +1121,23 @@
 
         async function handleBusinessSubmit(e) {
             e.preventDefault();
+            
+            const phoneInput = document.getElementById('phone').value.trim();
+            const phoneDigits = phoneInput.replace(/\D/g, '');
+            
+            // Validar que solo contenga números
+            if (phoneInput !== phoneDigits) {
+                showModal('Error de Validación', 'Solo se permiten números en el campo de teléfono. Valida tu información por favor.', 'error');
+                return;
+            }
+            
             state.formData = {
                 ...state.formData,
                 name: document.getElementById('name').value.trim(),
                 representative: document.getElementById('representative').value.trim(),
                 category: document.getElementById('category').value.trim(),
                 address: document.getElementById('address').value.trim(),
-                phone: document.getElementById('phone').value.trim(),
+                phone: phoneDigits,
                 hours: document.getElementById('hours').value.trim(),
                 days: document.getElementById('days').value,
                 description: document.getElementById('description').value.trim(),
@@ -1074,9 +1156,23 @@
             await saveReview(businessId, state.selectedRating, comment);
         }
 
-        function handleSearch(e) {
-            state.searchTerm = e.target.value;
-            render();
+        // Optimización: usar debounce para evitar re-renders excesivos
+        function handleSearchInput(e) {
+            const value = e.target.value;
+            // No actualizar state.searchTerm aquí para evitar re-render
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                state.searchTerm = value;
+                render();
+            }, 300);
+        }
+
+        function performSearch() {
+            const input = document.getElementById('search');
+            if (input) {
+                state.searchTerm = input.value;
+                render();
+            }
         }
 
         function selectRating(rating) {
@@ -1114,7 +1210,7 @@
                 representative: business.representative || '',
                 category: business.category || '',
                 address: business.address || '',
-                phone: business.phone || '+52 477 ',
+                phone: business.phone || '',
                 hours: business.hours || '',
                 days: business.days || 'Lunes a Viernes',
                 description: business.description || '',
